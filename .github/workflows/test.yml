@@ -12,13 +12,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: rustfmt, clippy
+      - run: test -s LICENSE
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test
+      - name: Scan Rust dependencies
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
       - run: cargo package --allow-dirty
       - run: cargo publish --dry-run
       - run: git diff --check
