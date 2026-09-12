@@ -11,11 +11,11 @@ fn fixture_environment() -> HashMap<String, String> {
         ("METIS_APP_TOKEN", "app-token"),
         (
             "METIS_LLM_0_ENDPOINT",
-            "http://metis.internal/api/model-gateway",
+            "http://platform.example.invalid/api/model-gateway",
         ),
         ("METIS_LLM_0_MODEL", "example-chat"),
         ("METIS_LLM_0_API_KEY", "model-token"),
-        ("METIS_S3_ENDPOINT", "http://silo.internal"),
+        ("METIS_S3_ENDPOINT", "http://storage.example.invalid"),
         ("METIS_S3_ACCESS_KEY", "app-access"),
         ("METIS_S3_SECRET_KEY", "app-secret"),
         ("METIS_S3_BUCKET", "caller-a7x2m"),
