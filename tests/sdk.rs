@@ -15,6 +15,21 @@ fn fixture_environment() -> HashMap<String, String> {
         ),
         ("METIS_LLM_0_MODEL", "example-chat"),
         ("METIS_LLM_0_API_KEY", "model-token"),
+        (
+            "METIS_EMBEDDING_0_ENDPOINT",
+            "http://platform.example.invalid/api/model-gateway",
+        ),
+        ("METIS_EMBEDDING_0_MODEL", "example-embedding"),
+        ("METIS_EMBEDDING_0_API_KEY", "embedding-token"),
+        ("METIS_EMBEDDING_0_DIMENSIONS", "1024"),
+        ("METIS_EMBEDDING_0_NORMALIZED", "true"),
+        (
+            "METIS_RERANK_0_ENDPOINT",
+            "http://platform.example.invalid/api/model-gateway",
+        ),
+        ("METIS_RERANK_0_MODEL", "example-rerank"),
+        ("METIS_RERANK_0_API_KEY", "rerank-token"),
+        ("METIS_RERANK_0_MAX_DOCUMENTS", "64"),
         ("METIS_S3_ENDPOINT", "http://storage.example.invalid"),
         ("METIS_S3_ACCESS_KEY", "app-access"),
         ("METIS_S3_SECRET_KEY", "app-secret"),
@@ -72,6 +87,19 @@ fn shared_contract_cache_and_config() {
         31001
     );
     assert_eq!(client.model("llm.0").unwrap().model, "example-chat");
+    assert_eq!(
+        client.model("embedding.0").unwrap().model,
+        "example-embedding"
+    );
+    assert_eq!(
+        client.model("embedding.0").unwrap().values["DIMENSIONS"],
+        "1024"
+    );
+    assert_eq!(client.model("rerank.0").unwrap().model, "example-rerank");
+    assert_eq!(
+        client.model("rerank.0").unwrap().values["MAX_DOCUMENTS"],
+        "64"
+    );
     assert_eq!(
         client.object_storage().unwrap().shared_buckets,
         vec!["shared-assets"]

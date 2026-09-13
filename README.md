@@ -14,9 +14,14 @@ use metis_platform_sdk::Client;
 fn main() -> Result<(), metis_platform_sdk::MetisError> {
     let client = Client::from_env()?;
     println!("{}", client.application().id);
+    let embedding = client.model("embedding.0")?;
+    let rerank = client.model("rerank.0")?;
+    println!("{} {}", embedding.model, rerank.model);
     Ok(())
 }
 ```
+
+`model()` 支持 `llm.N`、`embedding.N` 和 `rerank.N` 三类 slot，并返回对应的网关地址、模型别名、API key 及类型专属参数。SDK 不创建厂商客户端。
 
 运行环境必须提供 `METIS_PLATFORM_ENDPOINT`、`METIS_APP_ID` 和 `METIS_APP_TOKEN`。SDK 只负责平台 Runtime API 和配置解析，不实现业务协议客户端或自动重试。
 
