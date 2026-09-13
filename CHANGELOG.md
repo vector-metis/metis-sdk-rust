@@ -7,3 +7,6 @@
 ## 0.1.0
 
 - 首次公开发布。
+## 0.1.2
+
+- Expose dependency version, package SHA, directness, availability and resolution diagnostics.

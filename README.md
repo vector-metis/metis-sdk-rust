@@ -25,6 +25,9 @@ fn main() -> Result<(), metis_platform_sdk::MetisError> {
 
 运行环境必须提供 `METIS_PLATFORM_ENDPOINT`、`METIS_APP_ID` 和 `METIS_APP_TOKEN`。SDK 只负责平台 Runtime API 和配置解析，不实现业务协议客户端或自动重试。
 
+`Dependency` 同时提供 `requested_version`、`resolved_version`、`package_sha256`、`direct`、
+`available` 和 `resolution_error`，用于检查平台锁定版本及可选依赖的降级状态。
+
 ## 开发
 
 ```bash

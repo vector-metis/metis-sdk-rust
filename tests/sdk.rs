@@ -60,7 +60,7 @@ fn shared_contract_cache_and_config() {
             let body = if request_text.contains("/endpoints/database") {
                 r#"{"appId":"service-dependency-a7x2m","endpointName":"database","protocol":"RUNTIME_ENDPOINT_PROTOCOL_TCP","host":"127.0.0.1","port":31001,"available":true}"#
             } else {
-                r#"{"dependencies":[{"appId":"web-dependency-a7x2m","alias":"ui","required":true,"appType":"RUNTIME_APPLICATION_TYPE_WEB","available":true,"webBasePath":"/apps/web-dependency-a7x2m"}]}"#
+                r#"{"dependencies":[{"appId":"web-dependency-a7x2m","alias":"ui","required":true,"requestedVersion":"^1.2.0","resolvedVersion":"1.4.2","packageSha256":"sha256:web","available":true,"direct":true,"resolutionError":"","appType":"RUNTIME_APPLICATION_TYPE_WEB","webBasePath":"/apps/web-dependency-a7x2m"}]}"#
             };
             let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
             stream.write_all(response.as_bytes()).unwrap();
@@ -77,6 +77,11 @@ fn shared_contract_cache_and_config() {
     })
     .unwrap();
     assert_eq!(client.list_dependencies(false).unwrap()[0].alias, "ui");
+    let dependency = client.list_dependencies(false).unwrap().remove(0);
+    assert_eq!(dependency.requested_version, "^1.2.0");
+    assert_eq!(dependency.resolved_version, "1.4.2");
+    assert_eq!(dependency.package_sha256, "sha256:web");
+    assert!(dependency.direct);
     assert_eq!(client.list_dependencies(false).unwrap()[0].alias, "ui");
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert_eq!(
