@@ -15,6 +15,12 @@ fn fixture_environment() -> HashMap<String, String> {
         ),
         ("METIS_LLM_0_MODEL", "example-chat"),
         ("METIS_LLM_0_API_KEY", "model-token"),
+        ("METIS_LLM_0_SUPPORTS_VISION", "true"),
+        ("METIS_LLM_0_SUPPORTS_THINKING", "false"),
+        ("METIS_LLM_0_SUPPORTS_TOOLS", "true"),
+        ("METIS_LLM_0_CONTEXT_WINDOW", "32768"),
+        ("METIS_LLM_0_MAX_INPUT_TOKENS", "24576"),
+        ("METIS_LLM_0_MAX_OUTPUT_TOKENS", "8192"),
         (
             "METIS_EMBEDDING_0_ENDPOINT",
             "http://platform.example.invalid/api/model-gateway",
@@ -91,20 +97,29 @@ fn shared_contract_cache_and_config() {
             .port,
         31001
     );
-    assert_eq!(client.model("llm.0").unwrap().model, "example-chat");
-    assert_eq!(
-        client.model("embedding.0").unwrap().model,
-        "example-embedding"
-    );
-    assert_eq!(
-        client.model("embedding.0").unwrap().values["DIMENSIONS"],
-        "1024"
-    );
+    let llm = client.model("llm.0").unwrap();
+    assert_eq!(llm.model, "example-chat");
+    assert!(llm.supports_vision);
+    assert!(!llm.supports_thinking);
+    assert!(llm.supports_tools);
+    assert_eq!(llm.context_window, 32768);
+    assert_eq!(llm.max_output_tokens, 8192);
+
+    assert_eq!(client.try_model("llm.0").unwrap().model, "example-chat");
+    assert!(client.try_model("llm.1").is_none());
+    assert!(client.try_model("invalid").is_none());
+
+    let llms = client.models("llm").unwrap();
+    assert_eq!(llms.len(), 1);
+    assert_eq!(llms[0].model, "example-chat");
+    assert!(matches!(client.models("invalid"), Err(MetisError::InvalidConfig(_))));
+
+    let emb = client.model("embedding.0").unwrap();
+    assert_eq!(emb.model, "example-embedding");
+    assert_eq!(emb.dimensions, 1024);
+    assert!(emb.normalized);
+
     assert_eq!(client.model("rerank.0").unwrap().model, "example-rerank");
-    assert_eq!(
-        client.model("rerank.0").unwrap().values["MAX_DOCUMENTS"],
-        "64"
-    );
     assert_eq!(
         client.object_storage().unwrap().shared_buckets,
         vec!["shared-assets"]

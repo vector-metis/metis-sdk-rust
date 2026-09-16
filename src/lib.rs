@@ -98,7 +98,14 @@ pub struct ModelConfig {
     pub endpoint: String,
     pub model: String,
     pub api_key: String,
-    pub values: HashMap<String, String>,
+    pub supports_vision: bool,
+    pub supports_thinking: bool,
+    pub supports_tools: bool,
+    pub context_window: i64,
+    pub max_input_tokens: i64,
+    pub max_output_tokens: i64,
+    pub dimensions: i64,
+    pub normalized: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -246,6 +253,49 @@ impl Client {
         )
     }
 
+    fn parse_model_slot(&self, slot: &str) -> Option<ModelConfig> {
+        let parts: Vec<&str> = slot.split('.').collect();
+        if parts.len() != 2
+            || !matches!(parts[0], "llm" | "embedding" | "rerank")
+            || parts[1].is_empty()
+            || !parts[1].chars().all(|character| character.is_ascii_digit())
+        {
+            return None;
+        }
+        let prefix = format!("METIS_{}_{}_", parts[0].to_uppercase(), parts[1]);
+        let endpoint = self.environment.get(&format!("{prefix}ENDPOINT"))?.clone();
+        let model = self.environment.get(&format!("{prefix}MODEL"))?.clone();
+        let api_key = self.environment.get(&format!("{prefix}API_KEY"))?.clone();
+        if endpoint.is_empty() || model.is_empty() || api_key.is_empty() {
+            return None;
+        }
+        let to_int = |suffix: &str| -> i64 {
+            self.environment
+                .get(&format!("{prefix}{suffix}"))
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(0)
+        };
+        let to_bool = |suffix: &str| -> bool {
+            self.environment
+                .get(&format!("{prefix}{suffix}"))
+                .map(|v| v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false)
+        };
+        Some(ModelConfig {
+            endpoint,
+            model,
+            api_key,
+            supports_vision: to_bool("SUPPORTS_VISION"),
+            supports_thinking: to_bool("SUPPORTS_THINKING"),
+            supports_tools: to_bool("SUPPORTS_TOOLS"),
+            context_window: to_int("CONTEXT_WINDOW"),
+            max_input_tokens: to_int("MAX_INPUT_TOKENS"),
+            max_output_tokens: to_int("MAX_OUTPUT_TOKENS"),
+            dimensions: to_int("DIMENSIONS"),
+            normalized: to_bool("NORMALIZED"),
+        })
+    }
+
     pub fn model(&self, slot: &str) -> Result<ModelConfig, MetisError> {
         let parts: Vec<&str> = slot.split('.').collect();
         if parts.len() != 2
@@ -257,29 +307,31 @@ impl Client {
                 "invalid model slot {slot}"
             )));
         }
-        let prefix = format!("METIS_{}_{}_", parts[0].to_uppercase(), parts[1]);
-        let values = self
-            .environment
-            .iter()
-            .filter_map(|(name, value)| {
-                name.strip_prefix(&prefix)
-                    .map(|key| (key.to_owned(), value.clone()))
-            })
-            .collect::<HashMap<_, _>>();
-        let endpoint = values.get("ENDPOINT").cloned().unwrap_or_default();
-        let model = values.get("MODEL").cloned().unwrap_or_default();
-        let api_key = values.get("API_KEY").cloned().unwrap_or_default();
-        if endpoint.is_empty() || model.is_empty() || api_key.is_empty() {
-            return Err(MetisError::MissingConfig(format!(
+        self.parse_model_slot(slot).ok_or_else(|| {
+            MetisError::MissingConfig(format!(
                 "model slot {slot} requires ENDPOINT, MODEL and API_KEY"
+            ))
+        })
+    }
+
+    pub fn try_model(&self, slot: &str) -> Option<ModelConfig> {
+        self.parse_model_slot(slot)
+    }
+
+    pub fn models(&self, model_type: &str) -> Result<Vec<ModelConfig>, MetisError> {
+        if !matches!(model_type, "llm" | "embedding" | "rerank") {
+            return Err(MetisError::InvalidConfig(format!(
+                "invalid model type {model_type}"
             )));
         }
-        Ok(ModelConfig {
-            endpoint,
-            model,
-            api_key,
-            values,
-        })
+        let mut result = Vec::new();
+        for i in 0..10 {
+            let slot = format!("{model_type}.{i}");
+            if let Some(config) = self.parse_model_slot(&slot) {
+                result.push(config);
+            }
+        }
+        Ok(result)
     }
 
     pub fn object_storage(&self) -> Result<ObjectStorageConfig, MetisError> {
