@@ -112,7 +112,10 @@ fn shared_contract_cache_and_config() {
     let llms = client.models("llm").unwrap();
     assert_eq!(llms.len(), 1);
     assert_eq!(llms[0].model, "example-chat");
-    assert!(matches!(client.models("invalid"), Err(MetisError::InvalidConfig(_))));
+    assert!(matches!(
+        client.models("invalid"),
+        Err(MetisError::InvalidConfig(_))
+    ));
 
     let emb = client.model("embedding.0").unwrap();
     assert_eq!(emb.model, "example-embedding");
