@@ -2,6 +2,7 @@
 
 use percent_encoding::percent_decode_str;
 use reqwest::blocking::{Client as HttpClient, Request};
+use reqwest::header::{HeaderValue, AUTHORIZATION};
 use reqwest::Method;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
@@ -106,6 +107,129 @@ pub struct ModelConfig {
     pub max_output_tokens: i64,
     pub dimensions: i64,
     pub normalized: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModelAttribution {
+    Platform { tenant_id: i64, user_id: i64 },
+    External(String),
+    Other,
+}
+
+pub fn with_platform_identity(
+    tenant_id: i64,
+    user_id: i64,
+) -> Result<ModelAttribution, MetisError> {
+    if tenant_id <= 0 || user_id <= 0 {
+        return Err(MetisError::InvalidConfig(
+            "platform tenant and user ids must be positive".into(),
+        ));
+    }
+    Ok(ModelAttribution::Platform { tenant_id, user_id })
+}
+
+pub fn platform_identity_from_headers(
+    headers: &HashMap<String, String>,
+) -> Result<ModelAttribution, MetisError> {
+    let context = context_from_headers(headers);
+    let tenant_id = context.tenant_id.trim().parse::<i64>().map_err(|_| {
+        MetisError::InvalidConfig("headers do not contain a valid platform identity".into())
+    })?;
+    let user_id = context.user_id.trim().parse::<i64>().map_err(|_| {
+        MetisError::InvalidConfig("headers do not contain a valid platform identity".into())
+    })?;
+    with_platform_identity(tenant_id, user_id)
+}
+
+pub fn with_external_user(external_user_id: &str) -> Result<ModelAttribution, MetisError> {
+    let external_user_id = external_user_id.trim();
+    if external_user_id.is_empty()
+        || external_user_id.len() > 128
+        || external_user_id.chars().any(char::is_control)
+    {
+        return Err(MetisError::InvalidConfig(
+            "external user id must be 1-128 bytes without control characters".into(),
+        ));
+    }
+    Ok(ModelAttribution::External(external_user_id.to_owned()))
+}
+
+pub fn without_user_attribution() -> ModelAttribution {
+    ModelAttribution::Other
+}
+
+impl ModelConfig {
+    pub fn new_request(
+        &self,
+        method: &str,
+        request_path: &str,
+        body: Option<Vec<u8>>,
+        attribution: ModelAttribution,
+    ) -> Result<Request, MetisError> {
+        let endpoint = self.endpoint.trim().trim_end_matches('/');
+        let request_path = request_path.trim();
+        if endpoint.is_empty()
+            || self.api_key.is_empty()
+            || !request_path.starts_with('/')
+            || request_path.starts_with("//")
+        {
+            return Err(MetisError::InvalidConfig(
+                "model endpoint, API key and absolute request path are required".into(),
+            ));
+        }
+        let method = Method::from_bytes(method.as_bytes())
+            .map_err(|_| MetisError::InvalidConfig("HTTP method is invalid".into()))?;
+        let url = Url::parse(&format!("{endpoint}{request_path}"))
+            .map_err(|_| MetisError::InvalidConfig("model request URL is invalid".into()))?;
+        let mut request = Request::new(method, url);
+        request.headers_mut().insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", self.api_key))
+                .map_err(|_| MetisError::InvalidConfig("model API key is invalid".into()))?,
+        );
+        if let Some(body) = body {
+            *request.body_mut() = Some(body.into());
+        }
+        apply_attribution(&mut request, attribution)?;
+        Ok(request)
+    }
+}
+
+fn apply_attribution(
+    request: &mut Request,
+    attribution: ModelAttribution,
+) -> Result<(), MetisError> {
+    let headers = request.headers_mut();
+    headers.remove("x-platform-tenant-id");
+    headers.remove("x-platform-user-id");
+    headers.remove("x-platform-external-user-id");
+    match attribution {
+        ModelAttribution::Platform { tenant_id, user_id } => {
+            with_platform_identity(tenant_id, user_id)?;
+            headers.insert(
+                "x-platform-tenant-id",
+                HeaderValue::from_str(&tenant_id.to_string()).expect("integer header is valid"),
+            );
+            headers.insert(
+                "x-platform-user-id",
+                HeaderValue::from_str(&user_id.to_string()).expect("integer header is valid"),
+            );
+        }
+        ModelAttribution::External(external_user_id) => {
+            let valid = with_external_user(&external_user_id)?;
+            let ModelAttribution::External(external_user_id) = valid else {
+                unreachable!()
+            };
+            headers.insert(
+                "x-platform-external-user-id",
+                HeaderValue::from_str(&external_user_id).map_err(|_| {
+                    MetisError::InvalidConfig("external user id is not a valid header value".into())
+                })?,
+            );
+        }
+        ModelAttribution::Other => {}
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

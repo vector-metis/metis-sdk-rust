@@ -1,4 +1,7 @@
-use metis_platform_sdk::{context_from_headers, Client, Config, MetisError};
+use metis_platform_sdk::{
+    context_from_headers, platform_identity_from_headers, with_external_user,
+    with_platform_identity, without_user_attribution, Client, Config, MetisError, ModelAttribution,
+};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -156,5 +159,105 @@ fn invalid_values_use_stable_errors() {
     assert!(matches!(
         client.web_url("ui", "../admin"),
         Err(MetisError::Transport(_)) | Err(MetisError::Upstream { .. })
+    ));
+}
+
+#[test]
+fn model_requests_always_carry_slot_key_and_one_attribution() {
+    let client = Client::new(Config {
+        environment: Some(fixture_environment()),
+        ..Config::default()
+    })
+    .unwrap();
+    let model = client.model("llm.0").unwrap();
+    let request = model
+        .new_request(
+            "POST",
+            "/v1/chat/completions",
+            None,
+            with_platform_identity(42, 84).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(request.headers()["authorization"], "Bearer model-token");
+    assert_eq!(request.headers()["x-platform-tenant-id"], "42");
+    assert_eq!(request.headers()["x-platform-user-id"], "84");
+    assert!(!request
+        .headers()
+        .contains_key("x-platform-external-user-id"));
+
+    let request = model
+        .new_request(
+            "POST",
+            "/v1/embeddings",
+            None,
+            with_external_user(" customer-1 ").unwrap(),
+        )
+        .unwrap();
+    assert_eq!(request.headers()["authorization"], "Bearer model-token");
+    assert!(!request.headers().contains_key("x-platform-tenant-id"));
+    assert!(!request.headers().contains_key("x-platform-user-id"));
+    assert_eq!(
+        request.headers()["x-platform-external-user-id"],
+        "customer-1"
+    );
+
+    let request = model
+        .new_request("POST", "/v1/rerank", None, without_user_attribution())
+        .unwrap();
+    assert_eq!(request.headers()["authorization"], "Bearer model-token");
+    assert!(!request
+        .headers()
+        .contains_key("x-platform-external-user-id"));
+}
+
+#[test]
+fn model_attribution_rejects_invalid_values_and_paths() {
+    let mut headers = HashMap::new();
+    headers.insert("X-Platform-Tenant-Id".into(), "42".into());
+    headers.insert("x-platform-user-id".into(), "84".into());
+    assert_eq!(
+        platform_identity_from_headers(&headers).unwrap(),
+        with_platform_identity(42, 84).unwrap()
+    );
+    for (tenant_id, user_id) in [(0, 1), (1, -1)] {
+        assert!(matches!(
+            with_platform_identity(tenant_id, user_id),
+            Err(MetisError::InvalidConfig(_))
+        ));
+    }
+    for external_id in ["", " ", &"a".repeat(129), &"你".repeat(43), "bad\nvalue"] {
+        assert!(matches!(
+            with_external_user(external_id),
+            Err(MetisError::InvalidConfig(_))
+        ));
+    }
+    assert!(matches!(
+        platform_identity_from_headers(&HashMap::new()),
+        Err(MetisError::InvalidConfig(_))
+    ));
+
+    let client = Client::new(Config {
+        environment: Some(fixture_environment()),
+        ..Config::default()
+    })
+    .unwrap();
+    let model = client.model("llm.0").unwrap();
+    for path in ["", "v1/chat/completions", "//elsewhere.test/v1"] {
+        assert!(matches!(
+            model.new_request("POST", path, None, without_user_attribution()),
+            Err(MetisError::InvalidConfig(_))
+        ));
+    }
+    assert!(matches!(
+        model.new_request(
+            "POST",
+            "/v1/chat/completions",
+            None,
+            ModelAttribution::Platform {
+                tenant_id: 0,
+                user_id: 1
+            },
+        ),
+        Err(MetisError::InvalidConfig(_))
     ));
 }
