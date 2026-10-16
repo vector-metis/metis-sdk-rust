@@ -109,6 +109,33 @@ pub struct ModelConfig {
     pub normalized: bool,
 }
 
+/// Runtime API 返回的当前生效模型公共投影；不包含 API key 或供应商凭据。
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[serde(default)]
+pub struct RuntimeModel {
+    pub slot: String,
+    pub slot_type: String,
+    pub slot_index: i32,
+    pub interface: String,
+    pub endpoint: String,
+    pub model: String,
+    pub display_name: String,
+    pub icon_url: String,
+    pub description: String,
+    pub traits: Vec<String>,
+    pub supports_vision: bool,
+    pub supports_thinking: bool,
+    pub supports_tools: bool,
+    pub context_window: i64,
+    pub max_input_tokens: i64,
+    pub max_output_tokens: i64,
+    pub dimensions: i64,
+    pub activity: String,
+    pub busy_level: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelAttribution {
     Platform { tenant_id: i64, user_id: i64 },
@@ -256,6 +283,12 @@ struct DependenciesResponse {
     dependencies: Vec<Dependency>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ModelsResponse {
+    #[serde(default)]
+    models: Vec<RuntimeModel>,
+}
+
 #[derive(Debug, Clone)]
 struct CacheEntry {
     expires: Instant,
@@ -375,6 +408,13 @@ impl Client {
             &self.runtime_path(&["dependencies", selector, "endpoints", endpoint_name]),
             refresh,
         )
+    }
+
+    /// 返回当前应用已绑定 slot 的非敏感能力数据；未知状态保持 `unknown`。
+    pub fn list_runtime_models(&self, refresh: bool) -> Result<Vec<RuntimeModel>, MetisError> {
+        Ok(self
+            .get::<ModelsResponse>(&self.runtime_path(&["models"]), refresh)?
+            .models)
     }
 
     fn parse_model_slot(&self, slot: &str) -> Option<ModelConfig> {

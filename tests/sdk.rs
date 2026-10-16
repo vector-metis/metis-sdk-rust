@@ -57,7 +57,7 @@ fn shared_contract_cache_and_config() {
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let thread_calls = calls.clone();
     let server = thread::spawn(move || {
-        for _ in 0..2 {
+        for _ in 0..3 {
             let (mut stream, _) = listener.accept().unwrap();
             let mut request = [0; 2048];
             let size = stream.read(&mut request).unwrap();
@@ -68,6 +68,8 @@ fn shared_contract_cache_and_config() {
             thread_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let body = if request_text.contains("/endpoints/database") {
                 r#"{"appId":"service-dependency-a7x2m","endpointName":"database","protocol":"RUNTIME_ENDPOINT_PROTOCOL_TCP","host":"127.0.0.1","port":31001,"available":true}"#
+            } else if request_text.contains("/models") {
+                r#"{"models":[{"slot":"llm.0","slotType":"llm","slotIndex":0,"interface":"openai.chat.completions","model":"qwen-plus","displayName":"通义千问 Plus","traits":["vision","tools"],"supportsVision":true,"supportsTools":true,"activity":"active","busyLevel":"unknown","updatedAt":"2026-10-17T00:00:00Z"}]}"#
             } else {
                 r#"{"dependencies":[{"appId":"web-dependency-a7x2m","alias":"ui","required":true,"requestedVersion":"^1.2.0","resolvedVersion":"1.4.2","packageSha256":"sha256:web","available":true,"direct":true,"resolutionError":"","appType":"RUNTIME_APPLICATION_TYPE_WEB","webBasePath":"/apps/web-dependency-a7x2m"}]}"#
             };
@@ -100,6 +102,10 @@ fn shared_contract_cache_and_config() {
             .port,
         31001
     );
+    let runtime_models = client.list_runtime_models(false).unwrap();
+    assert_eq!(runtime_models[0].slot, "llm.0");
+    assert!(runtime_models[0].supports_vision);
+    assert_eq!(runtime_models[0].busy_level, "unknown");
     let llm = client.model("llm.0").unwrap();
     assert_eq!(llm.model, "example-chat");
     assert!(llm.supports_vision);
