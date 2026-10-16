@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- 升级 `quinn-proto` 与 `rustls` 到修复安全公告的版本。
+
 ## 0.3.1
 
 - 增加 `Client::list_runtime_models`，读取当前应用模型 slot 的展示元数据和非敏感能力字段。
