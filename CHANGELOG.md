@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.2
+## 0.3.3
 
 - 升级 `quinn-proto` 与 `rustls` 到修复安全公告的版本。
 
