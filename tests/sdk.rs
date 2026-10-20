@@ -68,8 +68,11 @@ fn shared_contract_cache_and_config() {
             thread_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let body = if request_text.contains("/endpoints/database") {
                 r#"{"appId":"service-dependency-a7x2m","endpointName":"database","protocol":"RUNTIME_ENDPOINT_PROTOCOL_TCP","host":"127.0.0.1","port":31001,"available":true}"#
-            } else if request_text.contains("/models") {
-                r#"{"models":[{"slot":"llm.0","slotType":"llm","slotIndex":0,"interface":"openai.chat.completions","model":"qwen-plus","displayName":"通义千问 Plus","traits":["vision","tools"],"supportsVision":true,"supportsTools":true,"activity":"active","busyLevel":"unknown","updatedAt":"2026-10-17T00:00:00Z"}]}"#
+            } else if request_text.contains("/api/runtime/v1/config") {
+                assert!(request_text
+                    .to_ascii_lowercase()
+                    .contains("x-metis-service: web"));
+                r#"{"schemaVersion":1,"revision":2,"config":{"settings":{"site-name":{"type":"string","value":"demo"}},"models":{"llm.0":{"slot":"llm.0","model":"qwen-plus","displayName":"通义千问 Plus","supportsVision":true,"activity":"active","busyLevel":"unknown"}},"storage":{},"tenant":{},"features":{}}}"#
             } else {
                 r#"{"dependencies":[{"appId":"web-dependency-a7x2m","alias":"ui","required":true,"requestedVersion":"^1.2.0","resolvedVersion":"1.4.2","packageSha256":"sha256:web","available":true,"direct":true,"resolutionError":"","appType":"RUNTIME_APPLICATION_TYPE_WEB","webBasePath":"/apps/web-dependency-a7x2m"}]}"#
             };
@@ -82,6 +85,7 @@ fn shared_contract_cache_and_config() {
         "METIS_PLATFORM_ENDPOINT".into(),
         format!("http://{address}"),
     );
+    environment.insert("METIS_SERVICE_NAME".into(), "web".into());
     let client = Client::new(Config {
         environment: Some(environment),
         ..Config::default()
@@ -102,10 +106,10 @@ fn shared_contract_cache_and_config() {
             .port,
         31001
     );
-    let runtime_models = client.list_runtime_models(false).unwrap();
-    assert_eq!(runtime_models[0].slot, "llm.0");
-    assert!(runtime_models[0].supports_vision);
-    assert_eq!(runtime_models[0].busy_level, "unknown");
+    let runtime_config = client.runtime_config(false).unwrap();
+    assert_eq!(runtime_config.revision, 2);
+    assert_eq!(runtime_config.models["llm.0"].display_name, "通义千问 Plus");
+    assert!(runtime_config.models["llm.0"].supports_vision);
     let llm = client.model("llm.0").unwrap();
     assert_eq!(llm.model, "example-chat");
     assert!(llm.supports_vision);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- 用 `Client::runtime_config()` 统一读取当前 service 的 settings、models、storage、tenant、features 和 revision。
+- 删除已废弃的 `list_runtime_models()` 及旧 Runtime Model API 路由。
+- 增加 `METIS_SERVICE_NAME` 和完整 RuntimeModel 展示、能力、状态字段。
+
 ## 0.3.3
 
 - 升级 `quinn-proto` 与 `rustls` 到修复安全公告的版本。

@@ -134,6 +134,35 @@ pub struct RuntimeModel {
     pub activity: String,
     pub busy_level: String,
     pub updated_at: String,
+    pub declared: bool,
+    pub bound: bool,
+    pub status: String,
+    pub icon_file_id: i64,
+    pub supports_audio: bool,
+    pub supports_image_input: bool,
+    pub supports_multimodal: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RuntimeSetting {
+    pub r#type: String,
+    pub required: bool,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RuntimeConfig {
+    pub schema_version: i64,
+    pub revision: i64,
+    pub updated_at: String,
+    pub application: HashMap<String, Value>,
+    pub settings: HashMap<String, RuntimeSetting>,
+    pub models: HashMap<String, RuntimeModel>,
+    pub storage: HashMap<String, Value>,
+    pub tenant: HashMap<String, Value>,
+    pub features: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -283,10 +312,24 @@ struct DependenciesResponse {
     dependencies: Vec<Dependency>,
 }
 
-#[derive(Debug, Deserialize)]
-struct ModelsResponse {
-    #[serde(default)]
-    models: Vec<RuntimeModel>,
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct RuntimeConfigResponse {
+    schema_version: i64,
+    revision: i64,
+    updated_at: String,
+    application: HashMap<String, Value>,
+    config: RuntimeConfigDomains,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct RuntimeConfigDomains {
+    settings: HashMap<String, RuntimeSetting>,
+    models: HashMap<String, RuntimeModel>,
+    storage: HashMap<String, Value>,
+    tenant: HashMap<String, Value>,
+    features: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -300,6 +343,7 @@ pub struct Client {
     endpoint: Url,
     app_id: String,
     token: String,
+    service: String,
     http: HttpClient,
     ttl: Duration,
     environment: Arc<HashMap<String, String>>,
@@ -331,6 +375,10 @@ impl Client {
         let endpoint_text = value(&config.platform_endpoint, "METIS_PLATFORM_ENDPOINT");
         let app_id = value(&config.app_id, "METIS_APP_ID");
         let token = value(&config.app_token, "METIS_APP_TOKEN");
+        let service = environment
+            .get("METIS_SERVICE_NAME")
+            .cloned()
+            .unwrap_or_default();
         if endpoint_text.is_empty() || app_id.is_empty() || token.is_empty() {
             return Err(MetisError::MissingConfig(
                 "METIS_PLATFORM_ENDPOINT, METIS_APP_ID and METIS_APP_TOKEN are required".into(),
@@ -352,6 +400,7 @@ impl Client {
             endpoint,
             app_id,
             token,
+            service,
             http,
             ttl,
             environment: Arc::new(environment),
@@ -410,11 +459,26 @@ impl Client {
         )
     }
 
-    /// 返回当前应用已绑定 slot 的非敏感能力数据；未知状态保持 `unknown`。
-    pub fn list_runtime_models(&self, refresh: bool) -> Result<Vec<RuntimeModel>, MetisError> {
-        Ok(self
-            .get::<ModelsResponse>(&self.runtime_path(&["models"]), refresh)?
-            .models)
+    /// 读取当前 service 的统一运行配置快照。
+    pub fn runtime_config(&self, refresh: bool) -> Result<RuntimeConfig, MetisError> {
+        if self.service.trim().is_empty() {
+            return Err(MetisError::MissingConfig(
+                "METIS_SERVICE_NAME is required".into(),
+            ));
+        }
+        let response: RuntimeConfigResponse =
+            self.get_with_headers("/api/runtime/v1/config", refresh, Some(&self.service))?;
+        Ok(RuntimeConfig {
+            schema_version: response.schema_version,
+            revision: response.revision,
+            updated_at: response.updated_at,
+            application: response.application,
+            settings: response.config.settings,
+            models: response.config.models,
+            storage: response.config.storage,
+            tenant: response.config.tenant,
+            features: response.config.features,
+        })
     }
 
     fn parse_model_slot(&self, slot: &str) -> Option<ModelConfig> {
@@ -646,6 +710,15 @@ impl Client {
     }
 
     fn get<T: DeserializeOwned>(&self, path: &str, refresh: bool) -> Result<T, MetisError> {
+        self.get_with_headers(path, refresh, None)
+    }
+
+    fn get_with_headers<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        refresh: bool,
+        service: Option<&str>,
+    ) -> Result<T, MetisError> {
         if !refresh && !self.ttl.is_zero() {
             if let Some(entry) = self
                 .cache
@@ -665,10 +738,14 @@ impl Client {
         }
         let mut url = self.endpoint.clone();
         url.set_path(path);
-        let response = self
+        let mut request = self
             .http
             .get(url)
-            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token));
+        if let Some(service) = service {
+            request = request.header("X-Metis-Service", service);
+        }
+        let response = request
             .send()
             .map_err(|error| MetisError::Transport(error.to_string()))?;
         let status = response.status();
