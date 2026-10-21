@@ -159,19 +159,35 @@ where
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
             formatter.write_str("an integer or a quoted decimal integer")
         }
-        fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> { Ok(value) }
+        fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+            Ok(value)
+        }
         fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-        where E: serde::de::Error { i64::try_from(value).map_err(E::custom) }
+        where
+            E: serde::de::Error,
+        {
+            i64::try_from(value).map_err(E::custom)
+        }
         fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where E: serde::de::Error { value.parse::<i64>().map_err(E::custom) }
+        where
+            E: serde::de::Error,
+        {
+            value.parse::<i64>().map_err(E::custom)
+        }
         fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-        where E: serde::de::Error { self.visit_str(&value) }
+        where
+            E: serde::de::Error,
+        {
+            self.visit_str(&value)
+        }
     }
     deserializer.deserialize_any(Visitor)
 }
 
 fn deserialize_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
-where D: serde::Deserializer<'de> {
+where
+    D: serde::Deserializer<'de>,
+{
     let value = deserialize_i64(deserializer)?;
     i32::try_from(value).map_err(serde::de::Error::custom)
 }
