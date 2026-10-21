@@ -116,6 +116,7 @@ pub struct ModelConfig {
 pub struct RuntimeModel {
     pub slot: String,
     pub slot_type: String,
+    #[serde(deserialize_with = "deserialize_i32")]
     pub slot_index: i32,
     pub interface: String,
     pub endpoint: String,
@@ -127,9 +128,13 @@ pub struct RuntimeModel {
     pub supports_vision: bool,
     pub supports_thinking: bool,
     pub supports_tools: bool,
+    #[serde(deserialize_with = "deserialize_i64")]
     pub context_window: i64,
+    #[serde(deserialize_with = "deserialize_i64")]
     pub max_input_tokens: i64,
+    #[serde(deserialize_with = "deserialize_i64")]
     pub max_output_tokens: i64,
+    #[serde(deserialize_with = "deserialize_i64")]
     pub dimensions: i64,
     pub activity: String,
     pub busy_level: String,
@@ -137,10 +142,38 @@ pub struct RuntimeModel {
     pub declared: bool,
     pub bound: bool,
     pub status: String,
+    #[serde(deserialize_with = "deserialize_i64")]
     pub icon_file_id: i64,
     pub supports_audio: bool,
     pub supports_image_input: bool,
     pub supports_multimodal: bool,
+}
+
+fn deserialize_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct Visitor;
+    impl<'de> serde::de::Visitor<'de> for Visitor {
+        type Value = i64;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("an integer or a quoted decimal integer")
+        }
+        fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> { Ok(value) }
+        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+        where E: serde::de::Error { i64::try_from(value).map_err(E::custom) }
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where E: serde::de::Error { value.parse::<i64>().map_err(E::custom) }
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+        where E: serde::de::Error { self.visit_str(&value) }
+    }
+    deserializer.deserialize_any(Visitor)
+}
+
+fn deserialize_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where D: serde::Deserializer<'de> {
+    let value = deserialize_i64(deserializer)?;
+    i32::try_from(value).map_err(serde::de::Error::custom)
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -154,7 +187,9 @@ pub struct RuntimeSetting {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RuntimeConfig {
+    #[serde(deserialize_with = "deserialize_i64")]
     pub schema_version: i64,
+    #[serde(deserialize_with = "deserialize_i64")]
     pub revision: i64,
     pub updated_at: String,
     pub application: HashMap<String, Value>,
@@ -315,7 +350,9 @@ struct DependenciesResponse {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct RuntimeConfigResponse {
+    #[serde(deserialize_with = "deserialize_i64")]
     schema_version: i64,
+    #[serde(deserialize_with = "deserialize_i64")]
     revision: i64,
     updated_at: String,
     application: HashMap<String, Value>,
