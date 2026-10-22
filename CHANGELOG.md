@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.5
+
+- 更新 Rust TLS 根证书和证书校验依赖，修复最新安全扫描告警。
+
 ## 0.4.4
 
 - Runtime Config 的 protobuf `int64/uint64` 字段统一以 `String` 暴露，删除隐式数值转换。
