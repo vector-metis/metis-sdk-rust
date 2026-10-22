@@ -1,6 +1,7 @@
 use metis_platform_sdk::{
     context_from_headers, platform_identity_from_headers, with_external_user,
     with_platform_identity, without_user_attribution, Client, Config, MetisError, ModelAttribution,
+    RuntimeModel,
 };
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -72,7 +73,7 @@ fn shared_contract_cache_and_config() {
                 assert!(request_text
                     .to_ascii_lowercase()
                     .contains("x-metis-service: web"));
-                r#"{"schemaVersion":1,"revision":2,"config":{"settings":{"site-name":{"type":"string","value":"demo"}},"models":{"llm.0":{"slot":"llm.0","model":"qwen-plus","displayName":"通义千问 Plus","supportsVision":true,"activity":"active","busyLevel":"unknown"}},"storage":{},"tenant":{},"features":{}}}"#
+                r#"{"schemaVersion":1,"revision":"2","config":{"settings":{"site-name":{"type":"string","value":"demo"}},"models":{"llm.0":{"slot":"llm.0","model":"qwen-plus","displayName":"通义千问 Plus","supportsVision":true,"activity":"active","busyLevel":"unknown","contextWindow":"131072","iconFileId":"42"}},"storage":{},"tenant":{},"features":{}}}"#
             } else {
                 r#"{"dependencies":[{"appId":"web-dependency-a7x2m","alias":"ui","required":true,"requestedVersion":"^1.2.0","resolvedVersion":"1.4.2","packageSha256":"sha256:web","available":true,"direct":true,"resolutionError":"","appType":"RUNTIME_APPLICATION_TYPE_WEB","webBasePath":"/apps/web-dependency-a7x2m"}]}"#
             };
@@ -107,9 +108,11 @@ fn shared_contract_cache_and_config() {
         31001
     );
     let runtime_config = client.runtime_config(false).unwrap();
-    assert_eq!(runtime_config.revision, 2);
+    assert_eq!(runtime_config.revision, "2");
     assert_eq!(runtime_config.models["llm.0"].display_name, "通义千问 Plus");
     assert!(runtime_config.models["llm.0"].supports_vision);
+    assert_eq!(runtime_config.models["llm.0"].context_window, "131072");
+    assert_eq!(runtime_config.models["llm.0"].icon_file_id, "42");
     let llm = client.model("llm.0").unwrap();
     assert_eq!(llm.model, "example-chat");
     assert!(llm.supports_vision);
@@ -144,6 +147,19 @@ fn shared_contract_cache_and_config() {
     headers.insert("x-platform-tenant-id".into(), "42".into());
     assert_eq!(context_from_headers(&headers).tenant_id, "42");
     server.join().unwrap();
+}
+
+#[test]
+fn runtime_64_bit_values_remain_strings() {
+    let model: RuntimeModel = serde_json::from_str(
+        r#"{"contextWindow":"9007199254740993","iconFileId":"640409671307362374"}"#,
+    )
+    .unwrap();
+    assert_eq!(model.context_window, "9007199254740993");
+    assert_eq!(model.icon_file_id, "640409671307362374");
+    let encoded = serde_json::to_string(&model).unwrap();
+    assert!(encoded.contains(r#""contextWindow":"9007199254740993""#));
+    assert!(encoded.contains(r#""iconFileId":"640409671307362374""#));
 }
 
 #[test]

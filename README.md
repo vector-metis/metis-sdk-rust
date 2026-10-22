@@ -25,6 +25,8 @@ fn main() -> Result<(), metis_platform_sdk::MetisError> {
 
 `runtime_config(false)` 返回当前 service 的模型展示名称、图标、能力、上下文限制、状态和 revision，不返回 API key 或供应商凭据。
 
+Runtime Config 中原始 protobuf 类型为 `int64` 或 `uint64` 的字段（如 `revision`、`context_window` 和 `icon_file_id`）在 protojson 中使用十进制字符串，Rust SDK 也直接使用 `String`。SDK 不执行数字猜测或隐式转换；需要计算时由应用显式调用 `parse`。这同时保证跨语言一致性和大整数安全。
+
 模型 slot API key 始终必填，请显式选择最终用户归因：
 
 ```rust

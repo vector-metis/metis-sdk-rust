@@ -116,7 +116,6 @@ pub struct ModelConfig {
 pub struct RuntimeModel {
     pub slot: String,
     pub slot_type: String,
-    #[serde(deserialize_with = "deserialize_i32")]
     pub slot_index: i32,
     pub interface: String,
     pub endpoint: String,
@@ -128,68 +127,25 @@ pub struct RuntimeModel {
     pub supports_vision: bool,
     pub supports_thinking: bool,
     pub supports_tools: bool,
-    #[serde(deserialize_with = "deserialize_i64")]
-    pub context_window: i64,
-    #[serde(deserialize_with = "deserialize_i64")]
-    pub max_input_tokens: i64,
-    #[serde(deserialize_with = "deserialize_i64")]
-    pub max_output_tokens: i64,
-    #[serde(deserialize_with = "deserialize_i64")]
-    pub dimensions: i64,
+    /// Original protobuf type: int64. protojson and this SDK use a decimal string.
+    pub context_window: String,
+    /// Original protobuf type: int64. The SDK does not infer or convert numeric values.
+    pub max_input_tokens: String,
+    /// Original protobuf type: int64. The SDK does not infer or convert numeric values.
+    pub max_output_tokens: String,
+    /// Original protobuf type: int64. The SDK does not infer or convert numeric values.
+    pub dimensions: String,
     pub activity: String,
     pub busy_level: String,
     pub updated_at: String,
     pub declared: bool,
     pub bound: bool,
     pub status: String,
-    #[serde(deserialize_with = "deserialize_i64")]
-    pub icon_file_id: i64,
+    /// Original protobuf type: int64. IDs remain strings in every SDK language.
+    pub icon_file_id: String,
     pub supports_audio: bool,
     pub supports_image_input: bool,
     pub supports_multimodal: bool,
-}
-
-fn deserialize_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    struct Visitor;
-    impl<'de> serde::de::Visitor<'de> for Visitor {
-        type Value = i64;
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("an integer or a quoted decimal integer")
-        }
-        fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
-            Ok(value)
-        }
-        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            i64::try_from(value).map_err(E::custom)
-        }
-        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            value.parse::<i64>().map_err(E::custom)
-        }
-        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            self.visit_str(&value)
-        }
-    }
-    deserializer.deserialize_any(Visitor)
-}
-
-fn deserialize_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = deserialize_i64(deserializer)?;
-    i32::try_from(value).map_err(serde::de::Error::custom)
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -203,10 +159,10 @@ pub struct RuntimeSetting {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RuntimeConfig {
-    #[serde(deserialize_with = "deserialize_i64")]
-    pub schema_version: i64,
-    #[serde(deserialize_with = "deserialize_i64")]
-    pub revision: i64,
+    /// Original protobuf type: int32; JSON remains a number.
+    pub schema_version: i32,
+    /// Original protobuf type: int64; protojson and this SDK use a decimal string.
+    pub revision: String,
     pub updated_at: String,
     pub application: HashMap<String, Value>,
     pub settings: HashMap<String, RuntimeSetting>,
@@ -366,10 +322,8 @@ struct DependenciesResponse {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct RuntimeConfigResponse {
-    #[serde(deserialize_with = "deserialize_i64")]
-    schema_version: i64,
-    #[serde(deserialize_with = "deserialize_i64")]
-    revision: i64,
+    schema_version: i32,
+    revision: String,
     updated_at: String,
     application: HashMap<String, Value>,
     config: RuntimeConfigDomains,

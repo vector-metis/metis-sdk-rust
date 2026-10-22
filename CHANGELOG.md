@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.4
+
+- Runtime Config 的 protobuf `int64/uint64` 字段统一以 `String` 暴露，删除隐式数值转换。
+
 ## 0.4.0
 
 - 用 `Client::runtime_config()` 统一读取当前 service 的 settings、models、storage、tenant、features 和 revision。
